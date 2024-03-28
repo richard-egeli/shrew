@@ -38,7 +38,6 @@ void GameLoop(void);
 #define WIDTH  32
 #define HEIGHT 32
 
-static Texture texture;
 static Texture foregroundLayer;
 static Texture decorationLayer;
 static Texture collisionLayer;
@@ -72,7 +71,11 @@ int main(int argc, char** argv) {
     }
 #endif
 
-    UnloadTexture(texture);
+    UnloadTexture(foregroundLayer);
+    UnloadTexture(backgroundLayer);
+    UnloadTexture(collisionLayer);
+    UnloadTexture(decorationLayer);
+    UnloadRenderTexture(renderTexture);
     CloseWindow();
     return 0;
 }

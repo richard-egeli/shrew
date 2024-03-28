@@ -20,7 +20,7 @@ typedef struct Player {
 } Player;
 
 void PlayerGravity(Player* player);
-void PlayerDraw(const Player* player);
+void PlayerDraw(Player* player);
 void PlayerMove(Player* player);
 void PlayerPhysicsStep(Player* player);
 Player PlayerInit(void);

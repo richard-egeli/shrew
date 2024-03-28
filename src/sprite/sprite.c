@@ -1,7 +1,7 @@
 #include "sprite.h"
 
-#include <math.h>
 #include <raylib.h>
+#include <stdbool.h>
 
 void SpriteDraw(const Sprite* sprite) {
     int width      = sprite->texture.width;
@@ -17,8 +17,8 @@ void SpriteDraw(const Sprite* sprite) {
     Rectangle rect = {
         .x      = cellPosX * cellW,
         .y      = cellPosY * cellH,
-        .width  = cellW,
-        .height = cellH,
+        .width  = sprite->invertX ? -cellW : cellW,
+        .height = sprite->invertY ? -cellH : cellH,
     };
 
     Vector2 position = {

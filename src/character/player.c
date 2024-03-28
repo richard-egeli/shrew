@@ -4,31 +4,54 @@
 #include <stdbool.h>
 #include <stdio.h>
 
-#include "coin.h"
 #include "pixel_collider.h"
 #include "raylib.h"
+#include "shrew.h"
 #include "sprite.h"
 
 Player PlayerInit() {
     return (Player){
-        .speed           = 1.0,
-        .sprite.texture  = LoadTextureFromImage(COIN_IMAGE),
-        .sprite.cellY    = 3,
-        .sprite.cellX    = 3,
+        .speed           = 0.5,
+        .sprite.texture  = LoadTextureFromImage(SHREW_IMAGE),
+        .sprite.cellY    = 1,
+        .sprite.cellX    = 2,
         .sprite.position = (Vector2){25, 750},
         .sprite.cell     = 0,
 
         .collider.x      = 0,
         .collider.y      = 0,
-        .collider.width  = 16,
-        .collider.height = 16,
+        .collider.width  = 13,
+        .collider.height = 8,
 
         .gravity         = 0.01,
         .gravityAccum    = 0.0,
     };
 }
 
-void PlayerDraw(const Player* player) { SpriteDraw(&player->sprite); }
+void PlayerDraw(Player* player) {
+    static double timing = 0.5;
+    static double accum;
+
+    float time = GetTime();
+
+    if (accum + timing < time) {
+        int w = player->sprite.cellX;
+        int h = player->sprite.cellY;
+        int t = w * h;
+        accum = time;
+
+        player->sprite.cell += 1;
+        player->sprite.cell = player->sprite.cell % t;
+    }
+
+    if (player->velocity.x > 0) {
+        player->sprite.invertX = false;
+    } else if (player->velocity.x < 0) {
+        player->sprite.invertX = true;
+    }
+
+    SpriteDraw(&player->sprite);
+}
 
 static bool PlayerUpSlope(const Player* player, Rectangle bounds) {
     if (player->velocity.x > 0) {
@@ -236,7 +259,7 @@ void PlayerMove(Player* player) {
         player->gravityAccum = -1;
     }
 
-    player->velocity.x = movement.x;
+    player->velocity.x = movement.x * player->speed;
     player->velocity.y = player->gravityAccum;
 }
 
