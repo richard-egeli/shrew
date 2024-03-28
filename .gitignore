@@ -1,0 +1,7 @@
+.cache/
+.vscode/
+assets/
+build/
+bin/
+
+.DS_Store
