@@ -3,7 +3,10 @@
 #include <raylib.h>
 #include <stdbool.h>
 
+#include "backgroundlayer.h"
 #include "collisionlayer.h"
+#include "decorationlayer.h"
+#include "foregroundlayer.h"
 #include "map.h"
 #include "pixel_collider.h"
 #include "player.h"
@@ -36,8 +39,10 @@ void GameLoop(void);
 #define HEIGHT 32
 
 static Texture texture;
-static Texture map;
+static Texture foregroundLayer;
+static Texture decorationLayer;
 static Texture collisionLayer;
+static Texture backgroundLayer;
 static Player player;
 static RenderTexture2D renderTexture;
 
@@ -46,12 +51,14 @@ int main(int argc, char** argv) {
 
     const Image colLayerImg = COLLISIONLAYER_IMAGE;
 
-    // map                  = LoadTextureFromImage(SIMPLE);
-    collisionLayer  = LoadTextureFromImage(colLayerImg);
+    foregroundLayer         = LoadTextureFromImage(FOREGROUNDLAYER_IMAGE);
+    backgroundLayer         = LoadTextureFromImage(BACKGROUNDLAYER_IMAGE);
+    collisionLayer          = LoadTextureFromImage(colLayerImg);
+    decorationLayer         = LoadTextureFromImage(DECORATIONLAYER_IMAGE);
 
-    player          = PlayerInit();
-    renderTexture   = LoadRenderTexture(400, 225);
-    camera.target.y = 800;
+    player                  = PlayerInit();
+    renderTexture           = LoadRenderTexture(400, 225);
+    camera.target.y         = 800;
 
     PixelColliderInit(&colLayerImg);
 
@@ -70,11 +77,10 @@ int main(int argc, char** argv) {
     return 0;
 }
 
-static bool isColliding = false;
-
 void HandlePlayerCollision() {
     PlayerMove(&player);
     PlayerGravity(&player);
+    PlayerPhysicsStep(&player);
 }
 
 void GameLoop(void) {
@@ -85,8 +91,11 @@ void GameLoop(void) {
     ClearBackground(PURPLE);
 
     BeginMode2D(camera);
+    DrawTexture(backgroundLayer, 0, 0, WHITE);
     DrawTexture(collisionLayer, 0, 0, WHITE);
+    DrawTexture(decorationLayer, 0, 0, WHITE);
     PlayerDraw(&player);
+    DrawTexture(foregroundLayer, 0, 0, WHITE);
     EndMode2D();
     EndTextureMode();
 

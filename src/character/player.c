@@ -2,11 +2,11 @@
 
 #include <math.h>
 #include <stdbool.h>
+#include <stdio.h>
 
 #include "coin.h"
 #include "pixel_collider.h"
 #include "raylib.h"
-#include "raymath.h"
 #include "sprite.h"
 
 Player PlayerInit() {
@@ -22,42 +22,93 @@ Player PlayerInit() {
         .collider.y      = 0,
         .collider.width  = 16,
         .collider.height = 16,
+
+        .gravity         = 0.01,
+        .gravityAccum    = 0.0,
     };
 }
 
 void PlayerDraw(const Player* player) { SpriteDraw(&player->sprite); }
 
-static bool PlayerSlope(Rectangle bounds) {
-    Rectangle bottomRight = {
-        .x      = bounds.x + bounds.width - 1,
-        .y      = bounds.y + bounds.height - 1,
-        .width  = 1,
-        .height = 1,
-    };
+static bool PlayerUpSlope(const Player* player, Rectangle bounds) {
+    if (player->velocity.x > 0) {
+        Rectangle bottomRight = {
+            .x      = bounds.x + bounds.width - 1,
+            .y      = bounds.y + bounds.height - 1,
+            .width  = 1,
+            .height = 1,
+        };
 
-    Rectangle bottomLeft = {
-        .x      = ceilf(bounds.x - 1),
-        .y      = bounds.y + bounds.height - 1,
-        .width  = 1,
-        .height = 1,
-    };
+        Rectangle upperRight = bottomRight;
+        upperRight.y -= player->collider.height;
+        upperRight.height = player->collider.height;
 
-    Rectangle upperLeft  = bottomLeft;
-    Rectangle upperRight = bottomRight;
+        bool rightB       = PixelColliderOverlap(bottomRight);
+        bool rightU       = PixelColliderOverlap(upperRight);
+        return rightB && !rightU;
+    } else if (player->velocity.x < 0) {
+        Rectangle bottomLeft = {
+            .x      = bounds.x,
+            .y      = bounds.y + bounds.height - 1,
+            .width  = 1,
+            .height = 1,
+        };
 
-    upperLeft.y -= 1.5;
-    upperRight.y -= 1.5;
+        Rectangle upperLeft = bottomLeft;
 
-    bool rightB = PixelColliderOverlap(bottomRight);
-    bool rightU = PixelColliderOverlap(upperRight);
-    bool leftB  = PixelColliderOverlap(bottomLeft);
-    bool leftU  = PixelColliderOverlap(upperLeft);
+        upperLeft.y -= player->collider.height;
+        upperLeft.height = player->collider.height;
 
-    bool result = (rightB && !rightU) || (leftB && !leftU);
-    return result;
+        bool leftB       = PixelColliderOverlap(bottomLeft);
+        bool leftU       = PixelColliderOverlap(upperLeft);
+
+        return leftB && !leftU;
+    }
+
+    return false;
 }
 
-bool PlayerGrounded(Player* player) {
+static bool PlayerDownSlope(const Player* player, Rectangle bounds) {
+    if (player->grounded) return false;
+
+    if (player->velocity.x > 0) {
+        Rectangle upperLeft = {
+            .x      = ceilf(bounds.x - 1),
+            .y      = bounds.y + bounds.height,
+            .width  = 1,
+            .height = 1,
+        };
+
+        Rectangle bottomLeft = upperLeft;
+
+        bottomLeft.y += 1;
+
+        bool leftU = PixelColliderOverlap(upperLeft);
+        bool leftB = PixelColliderOverlap(bottomLeft);
+
+        return !leftU && leftB;
+    } else if (player->velocity.x < 0) {
+        Rectangle upperRight = {
+            .x      = bounds.x + bounds.width,
+            .y      = bounds.y + bounds.height,
+            .width  = 1,
+            .height = 1,
+        };
+
+        Rectangle bottomRight = upperRight;
+        bottomRight.y += 1;
+
+        bool rightU = PixelColliderOverlap(upperRight);
+        bool rightB = PixelColliderOverlap(bottomRight);
+        return !rightU && rightB;
+    }
+
+    return false;
+}
+
+static bool PlayerGrounded(const Player* player) {
+    if (player->jumping) return false;
+
     Rectangle bounds = (Rectangle){
         .x      = player->sprite.position.x,
         .y      = player->sprite.position.y + player->collider.height,
@@ -68,37 +119,36 @@ bool PlayerGrounded(Player* player) {
     return PixelColliderOverlap(bounds);
 }
 
-void PlayerGravity(Player* player) {
-    Rectangle bounds = PlayerBounds(player);
-    bounds.y += player->gravity;
-    player->gravity += 0.003;
+static bool PlayerCeiling(const Player* player) {
+    Rectangle bounds = (Rectangle){
+        .x      = player->sprite.position.x,
+        .y      = player->sprite.position.y - 1,
+        .width  = player->collider.width,
+        .height = 1,
+    };
 
-    if (player->gravity > 1.0) player->gravity = 1.0;
+    return PixelColliderOverlap(bounds);
+}
+
+void PlayerGravity(Player* player) {
+    player->gravityAccum += player->gravity;
+
+    if (player->gravityAccum > 1.0) player->gravityAccum = 1.0;
+
     if (!PlayerGrounded(player)) {
-        player->grounded          = false;
-        player->sprite.position.y = bounds.y;
+        player->grounded = false;
     } else {
         player->grounded          = true;
-        player->gravity           = 0.1;
+        player->gravityAccum      = 0.1;
         player->sprite.position.y = (int)player->sprite.position.y;
     }
 }
 
-void PlayerMove(Player* player) {
-    Vector2 movement = {0};
-
-    if (IsKeyDown(KEY_W)) movement.y -= 1;
-    if (IsKeyDown(KEY_S)) movement.y += 1;
-    if (IsKeyDown(KEY_A)) movement.x -= 1;
-    if (IsKeyDown(KEY_D)) movement.x += 1;
-    if (movement.x == 0 && movement.y == 0) return;
-
-    Vector2 normalized = Vector2Normalize(movement);
-    movement.x         = normalized.x * player->speed;
-    movement.y         = normalized.y * player->speed;
-
-    float distance = sqrtf(movement.x * movement.x + movement.y * movement.y);
-    int substeps   = (int)ceilf(distance);
+void PlayerPhysicsStep(Player* player) {
+    float x                 = player->velocity.x;
+    float y                 = player->velocity.y;
+    float distance          = sqrtf(x * x + y * y);
+    int substeps            = (int)ceilf(distance);
     float substepMultiplier = 1.0 / substeps;
 
     Rectangle bounds        = PlayerBounds(player);
@@ -108,14 +158,22 @@ void PlayerMove(Player* player) {
 
     for (int i = 0; i < substeps; i++) {
         float old  = bounds.x;
-        float dist = movement.x * substepMultiplier;
+        float dist = x * substepMultiplier;
         bounds.x += dist;
-        if (PlayerSlope(bounds)) slope -= 1.0;
+
+        if (!player->jumping) {
+            if (PlayerUpSlope(player, bounds)) slope -= 1;
+            if (PlayerDownSlope(player, bounds)) slope += 1;
+        }
 
         bounds.x = old;
         if (!vertical) {
             float old  = bounds.y;
-            float dist = movement.y * substepMultiplier + slope;
+            float dist = y;
+
+            dist *= substepMultiplier;
+            dist += slope;
+
             bounds.y += dist;
 
             if (PixelColliderOverlap(bounds)) {
@@ -138,6 +196,48 @@ void PlayerMove(Player* player) {
 
     player->sprite.position.x = bounds.x;
     player->sprite.position.y = bounds.y;
+}
+
+static void CalculateYVelocity(const Player* player) {
+    float velocity = 0.0f;
+
+    velocity += player->velocity.y;
+}
+
+bool PlayerJump(Player* player) {
+    if (PlayerCeiling(player)) {
+        player->ceiling = true;
+
+        if (player->gravityAccum < 0) {
+            player->gravityAccum = 0;
+        }
+        return false;
+    } else {
+        player->ceiling = false;
+    }
+
+    if (player->grounded && IsKeyDown(KEY_SPACE)) {
+        player->jumping = true;
+        return true;
+    } else if (player->velocity.y >= 0) {
+        player->jumping = false;
+    }
+
+    return false;
+}
+
+void PlayerMove(Player* player) {
+    Vector2 movement = {0};
+
+    if (IsKeyDown(KEY_A)) movement.x -= 1;
+    if (IsKeyDown(KEY_D)) movement.x += 1;
+
+    if (PlayerJump(player)) {
+        player->gravityAccum = -1;
+    }
+
+    player->velocity.x = movement.x;
+    player->velocity.y = player->gravityAccum;
 }
 
 Rectangle PlayerBounds(const Player* player) {
